@@ -158,3 +158,79 @@ png("NJ_traffic_fatalities_by_year.png", width = 800, height = 600)
 grid.arrange(graph, banner, heights = c(1, .05))
 dev.off()
 
+#+ change.by.state, echo=FALSE
+changes <- data.fatalities %.%
+  group_by(STATE.NAME) %.%
+  summarize(CHANGE.PERCENT = ((FATALITIES[YEAR == 2012] / FATALITIES[YEAR == 1975]) - 1) * 100) %.%
+  mutate(STATE.NAME = factor(STATE.NAME, levels = STATE.NAME[order(CHANGE.PERCENT, decreasing = TRUE)]))
+
+graph <- ggplot(data = changes,
+                aes(x = STATE.NAME,
+                    y = CHANGE.PERCENT,
+                    fill = log(abs(CHANGE.PERCENT)) * sign(CHANGE.PERCENT))) +
+  theme_minimal(base_size = 20) +
+  theme(panel.grid.major = element_line(color = "#00000050"),
+        panel.grid.minor = element_line(color = "#00000012", linetype = 2),
+        axis.title.y = element_text(vjust = 0.4),
+        axis.title.x = element_text(vjust = 0),
+        plot.background = element_rect(fill = "#F0F0F0", color = "#F0F0F0"),
+        text = element_text(family = "Courier"),
+        plot.margin = unit(rep(1, 4), "lines")) +
+  coord_flip(xlim = c(0, 55)) +
+  xlab("US state") +
+  ylab("Percent change\nin traffic fatalities\n1975-2012") +
+  guides(fill = FALSE) +
+  scale_fill_gradient2(low = "dodgerblue4", mid = "white", high = "red") +
+  geom_bar(stat = "identity", position = "identity", color = "#000000") + 
+  geom_hline(yintercept = 0) +
+  geom_segment(aes(y = -2, x = 53, yend = -25, xend = 53), arrow = arrow(length = unit(0.2, "cm"))) +
+  geom_segment(aes(y = 2, x = 53, yend = 25, xend = 53), arrow = arrow(length = unit(0.2, "cm"))) +
+  annotate("text", y = c(-2, 2), x = 54, label = c("better", "worse"), 
+           hjust = c(1, 0), size = 10, family = "Courier")
+  
+
+inset <- ggplotGrob(ggplot(data = map_data("state") , 
+                           aes(x = long, 
+                               y = lat, 
+                               group = group)) + 
+                      theme_minimal() + 
+                      theme(line = element_blank(),
+                            text = element_blank(),
+                            title = element_blank(),
+                            plot.margin = unit(c(0,0,-1,-1), "lines")) +
+                      coord_fixed(ratio = 1) + 
+                      geom_polygon(color = "dodgerblue4", fill = "dodgerblue4"))
+
+graph <- graph + annotation_custom(grob = inset,
+                                   ymin = -75, ymax = -15, xmax = 15)
+
+banner <- ggplot(data = data.table(x = 0, y = 0),
+                 aes(x = x, y = y)) +
+  theme_minimal() +
+  theme(line = element_blank(),
+        text = element_blank(),
+        title = element_blank(),
+        plot.margin = unit(c(0,0,-1,-1), "lines"),
+        panel.background = element_rect(fill = "grey40", color = "grey40")) + 
+  geom_text(label = "") + 
+  xlim(0, 10) +
+  annotate("text", x = c(0, 10), y = 0, 
+           label = c("GRAPHZOO.TUMBLR.COM", "SOURCE: NHTSA"),
+           color = "white", hjust = c(0.1, 0.8),
+           size = 4, family = "Avenir Next Condensed")
+
+png("US_traffic_fatalities_change_by_state.png", width = 800, height = 1000)
+grid.arrange(graph, banner, heights = c(1, .05))
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
