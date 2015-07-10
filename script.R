@@ -34,8 +34,9 @@ data.info <- data.table(YEAR = 1975:2012) %.%
 #+ extract.fatalities, echo=FALSE
 if (file.exists("data/fatalities.csv")) {
   data.fatalities <- fread("data/fatalities.csv")
-} else {
-  state.code <- fread("data/state_codes.csv")
+} else {  
+  codes <- as.data.table(fread("data/US_FIPS_Codes.csv"))
+  setnames(codes, names(codes), make.names(names(codes)))
   
   data.fatalities <- data.table()
   
@@ -46,11 +47,13 @@ if (file.exists("data/fatalities.csv")) {
     filename <- paste0("tmp/", filename)
     
     tmp <- as.data.table(read.dbf(filename)) %.%
-      group_by(STATE) %.%
+      group_by(STATE, COUNTY) %.%
       summarize(FATALITIES = sum(INJ_SEV == 4)) %.%
-      mutate(STATE.NAME = state.code$V2[match(STATE, state.code$V1)],
+      mutate(STATE.NAME = codes$State[match(STATE, codes$FIPS.State)],
+             COUNTY.NAME = codes$County.Name[match(paste(STATE, "-", COUNTY), 
+                                                   paste(codes$FIPS.State, "-", codes$FIPS.County))],
              YEAR = data.info$YEAR[i])
-    setcolorder(tmp, c("YEAR", "STATE", "STATE.NAME", "FATALITIES"))
+    setcolorder(tmp, c("YEAR", "STATE", "STATE.NAME", "COUNTY", "COUNTY.NAME", "FATALITIES"))
     data.fatalities <- rbind(data.fatalities, tmp)
     
     unlink("tmp", recursive=TRUE)
@@ -62,7 +65,13 @@ if (file.exists("data/fatalities.csv")) {
 }
 
 #+ fatalities.by.state, echo=FALSE
-graph <- ggplot(data = data.fatalities,
+tmp <- data.fatalities %.%
+  group_by(YEAR, STATE.NAME) %.%
+  summarise(FATALITIES = sum(FATALITIES)) %.%
+  ungroup() %.%
+  mutate(ID = 1:length(FATALITIES))
+
+graph <- ggplot(data = tmp,
                 aes(x = YEAR,
                     y = FATALITIES,
                     fill = STATE.NAME)) +   
@@ -104,7 +113,7 @@ grid.arrange(graph, banner, heights = c(1, .05))
 dev.off()
 
 #+ fatalities.NJ, echo=FALSE
-graph <- ggplot(data = filter(data.fatalities, STATE.NAME == "New Jersey"),
+graph <- ggplot(data = filter(tmp, STATE.NAME == "New Jersey"),
                 aes(x = YEAR,
                     y = FATALITIES)) +
   theme_minimal(base_size = 18) +
@@ -159,10 +168,11 @@ grid.arrange(graph, banner, heights = c(1, .05))
 dev.off()
 
 #+ change.by.state, echo=FALSE
-changes <- data.fatalities %.%
+changes <- tmp %.%
   group_by(STATE.NAME) %.%
   summarize(CHANGE.PERCENT = ((FATALITIES[YEAR == 2012] / FATALITIES[YEAR == 1975]) - 1) * 100) %.%
-  mutate(STATE.NAME = factor(STATE.NAME, levels = STATE.NAME[order(CHANGE.PERCENT, decreasing = TRUE)]))
+  mutate(STATE.NAME = factor(STATE.NAME, levels = STATE.NAME[order(CHANGE.PERCENT, decreasing = TRUE)])) %.%
+  ungroup()
 
 graph <- ggplot(data = changes,
                 aes(x = STATE.NAME,
@@ -223,13 +233,31 @@ png("US_traffic_fatalities_change_by_state.png", width = 800, height = 1000)
 grid.arrange(graph, banner, heights = c(1, .05))
 dev.off()
 
+#+ map.by.county, echo=FALSE
+tmp <- data.fatalities %.%
+  filter(YEAR == 2012) %.%
+  mutate(COUNTY.NAME = tolower(COUNTY.NAME),
+         STATE.NAME = tolower(STATE.NAME))
 
-
-
-
-
-
-
+map.counties <- as.data.table(map_data("county")) %.%
+  mutate(fatalities = tmp$FATALITIES[match(paste0(region, subregion), paste0(tmp$STATE.NAME, tmp$COUNTY.NAME))])
+  
+ggplot(map.counties, 
+       aes(x = long, 
+           y = lat,
+           group = group,
+           fill = fatalities)) +
+  theme_minimal(base_size = 20) +
+  theme(panel.grid.major = element_line(color = "#00000050"),
+        panel.grid.minor = element_line(color = "#00000012", linetype = 2),
+        axis.title.y = element_text(vjust = 0.4),
+        axis.title.x = element_text(vjust = 0),
+        plot.background = element_rect(fill = "#F0F0F0", color = "#F0F0F0"),
+        text = element_text(family = "Courier"),
+        plot.margin = unit(rep(1, 4), "lines")) +
+  scale_fill_gradient(low = "dodgerblue4", high = "red", na.value = "dodgerblue4", limits = c(0, 900)) +
+  coord_fixed() +
+  geom_polygon(color = "#FFFFFF25")
 
 
 
